@@ -1,43 +1,102 @@
 import React, { useState } from "react";
+import {
+  Typography,
+  TextField,
+  Button,
+  Paper,
+  CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+} from "@mui/material";
 
-function SubdomainPage() {
+export default function SubdomainPage() {
   const [domain, setDomain] = useState("");
   const [subdomains, setSubdomains] = useState([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [selectedTool, setSelectedTool] = useState("");
 
-  const handleScan = () => {
-    setSubdomains([
-      `api.${domain || "example.com"}`,
-      `mail.${domain || "example.com"}`,
-      `dev.${domain || "example.com"}`,
-    ]);
+  const handleScan = (tool) => {
+    if (!domain) {
+      alert("Please enter a domain.");
+      return;
+    }
+
+    setIsScanning(true);
+    setSelectedTool(tool);
+    setSubdomains([]); // Clear previous results
+
+    setTimeout(() => {
+      setIsScanning(false);
+      const toolName = tool === "ffuf" ? "FFUF" : "Sublist3r";
+      setSubdomains([
+        `subdomain-1.${domain} (via ${toolName})`,
+        `subdomain-2.${domain} (via ${toolName})`,
+        `subdomain-3.${domain} (via ${toolName})`,
+      ]);
+    }, 2000);
   };
 
   return (
     <div className="main">
-      <div className="card">
-        <h2>🌐 Subdomain Finder</h2>
-        <div className="form-row">
-          <input
-            className="input"
-            placeholder="Enter domain"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-          />
-          <button className="btn" onClick={handleScan}>Find</button>
+      <Paper className="card" sx={{ p: 2, mb: 3, backgroundColor: "var(--card)" }}>
+        <Typography variant="h4" gutterBottom sx={{ color: "var(--accent)" }}>
+          🌐 Subdomain Finder
+        </Typography>
+        <Typography variant="body1" sx={{ color: "var(--text)", mb: 2 }}>
+          Choose a tool to discover subdomains for the target domain.
+        </Typography>
+        <TextField
+          label="Enter domain"
+          variant="outlined"
+          fullWidth
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          sx={{
+            mb: 2,
+            "& .MuiInputBase-root": {
+              color: "var(--text)",
+              backgroundColor: "var(--panel)",
+              "& fieldset": { borderColor: "rgba(255,255,255,0.08)" },
+              "&:hover fieldset": { borderColor: "var(--accent)" },
+            },
+            "& .MuiInputLabel-root": { color: "var(--text)" },
+          }}
+        />
+        <div style={{ display: "flex", gap: "16px" }}>
+          <Button
+            variant="contained"
+            onClick={() => handleScan("ffuf")}
+            disabled={isScanning}
+            sx={{ flex: 1, backgroundColor: "var(--accent)", color: "var(--bg)", "&:hover": { backgroundColor: "var(--accent)" } }}
+          >
+            {isScanning && selectedTool === "ffuf" ? <CircularProgress size={24} sx={{ color: "var(--bg)" }} /> : "Run FFUF"}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => handleScan("sublist3r")}
+            disabled={isScanning}
+            sx={{ flex: 1, backgroundColor: "var(--accent)", color: "var(--bg)", "&:hover": { backgroundColor: "var(--accent)" } }}
+          >
+            {isScanning && selectedTool === "sublist3r" ? <CircularProgress size={24} sx={{ color: "var(--bg)" }} /> : "Run Sublist3r"}
+          </Button>
         </div>
-      </div>
+      </Paper>
+      
       {subdomains.length > 0 && (
-        <div className="card">
-          <h3>Results</h3>
-          <ul className="history-list">
-            {subdomains.map((s, i) => (
-              <li key={i} className="history-item">{s}</li>
+        <Paper className="card" sx={{ p: 2, mt: 3, backgroundColor: "var(--card)" }}>
+          <Typography variant="h5" gutterBottom sx={{ color: "var(--accent)" }}>
+            Results3
+          </Typography>
+          <List>
+            {subdomains.map((sub, index) => (
+              <ListItem key={index} sx={{ borderBottom: "1px solid rgba(255,255,255,0.05)", py: 1 }}>
+                <ListItemText primary={sub} sx={{ color: "var(--text)" }} />
+              </ListItem>
             ))}
-          </ul>
-        </div>
+          </List>
+        </Paper>
       )}
     </div>
   );
 }
-
-export default SubdomainPage;

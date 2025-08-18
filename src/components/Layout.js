@@ -1,15 +1,13 @@
-// src/components/Layout.js
-import React from "react";
-import MuiSidebar from "./MuiSidebar";
-import "../styles.css";
+import Sidebar from "./Sidebar";
+import { Outlet } from "react-router-dom";
 
 export default function Layout({ children }) {
   return (
     <div className="app">
-      <MuiSidebar />
-      <div className="main">
-        {children}
-      </div>
+      <Sidebar />
+      <main style={{ flex: 1, padding: "20px" }}>
+        {children || <Outlet />}
+      </main>
     </div>
   );
 }

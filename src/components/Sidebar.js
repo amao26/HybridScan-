@@ -1,86 +1,124 @@
-import * as React from "react";
-import Accordion from "@mui/material/Accordion";
-import AccordionSummary from "@mui/material/AccordionSummary";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import Typography from "@mui/material/Typography";
+import React from "react";
+import {
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Typography,
+} from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { NavLink } from "react-router-dom";
 
 const sidebarData = [
   {
     title: "Reconnaissance",
-
     tools: [
-      "Network Scan (Nmap)",
-      "Subdomain Scan (FFUF/Sublist3r)",
-      "OSINT / Public Data",
+      { name: "Network Scan (Nmap)", path: "/recon/nmappage" },
+      { name: "Subdomain Scan (FFUF/Sublist3r)", path: "/recon/subdomain" },
+      { name: "OSINT / Public Data", path: "/recon/osint" },
     ],
   },
   {
-    title: "Vulnerability Analysis",
+    title: "Vulnerabilities",
     tools: [
-      "Web Vulnerability Scan (OWASP ZAP/Nikto)",
-      "Database Assessment (SQLmap/DB Scan)",
+      { name: "Web Vulnerability Scan", path: "/vuln/web" },
+      { name: "Database Scan", path: "/vuln/dbscan" },
     ],
   },
   {
-    title: "Exploitation / Demo Exploit",
+    title: "Exploitation",
     tools: [
-      "Vulnerability Exploit Simulation",
-      "Privilege Escalation Demo",
-      "Post-Exploitation Data Collection",
+      { name: "Exploit Simulator", path: "/exploit/sim" },
+      { name: "Privilege Escalation", path: "/exploit/privesc" },
+      { name: "Post-Exploitation", path: "/exploit/postex" },
     ],
   },
   {
-    title: "Results & AI Guidance",
-    tools: ["View Scan Results", "AI Security Recommendations"],
+    title: "Results",
+    tools: [
+      { name: "Results", path: "/results" },
+      { name: "AI Assistant", path: "/ai" },
+    ],
   },
 ];
 
-export default function MuiSidebar({ onSelectTool }) {
+export default function Sidebar() {
   return (
-    <div className="sidebar">
-      <div className="brand">HybridScan</div>
-
-      {sidebarData.map((module) => (
-        <Accordion
-          key={module.title}
+    <aside
+      style={{
+        width: 280,
+        background: "linear-gradient(180deg, #0a0a0a 0%, #121212 100%)",
+        borderRight: "1px solid #0f0",
+        height: "100vh",
+        color: "#0f0",
+        fontFamily: "'Share Tech Mono', monospace",
+        overflowY: "auto",
+      }}
+    >
+      {/* 👇 Dashboard link at the top */}
+      <NavLink
+        to="/ "
+        className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+        style={{ textDecoration: "none" }}
+      >
+        <Typography
+          component="span"
           sx={{
-            background: "var(--panel)",
-            color: "var(--accent)",
-            marginBottom: "6px",
+            display: "block",
+            padding: "12px 16px",
             borderRadius: "6px",
-            "& .MuiAccordionSummary-content": { alignItems: "center" },
+            fontSize: "15px",
+            fontWeight: "bold",
+            transition: "all 0.25s ease-in-out",
           }}
         >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon sx={{ color: "var(--accent)" }} />}
-            aria-controls={`${module.title}-content`}
-            id={`${module.title}-header`}
-          >
-            <Typography component="span">
-              {module.icon} {module.title}
+          Dashboard
+        </Typography>
+      </NavLink>
+
+      {/* Existing sections */}
+      {sidebarData.map((module, i) => (
+        <Accordion
+          key={i}
+          defaultExpanded
+          disableGutters
+          sx={{
+            background: "transparent",
+            color: "#0f0",
+            boxShadow: "none",
+            "&:before": { display: "none" },
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "#0f0" }} />}>
+            <Typography variant="subtitle1" sx={{ fontWeight: "bold", letterSpacing: 1 }}>
+              {module.title}
             </Typography>
           </AccordionSummary>
-          <AccordionDetails sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+
+          <AccordionDetails sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {module.tools.map((tool, idx) => (
-              <Typography
+              <NavLink
                 key={idx}
-                component="span"
-                className="nav a"
-                sx={{
-                  cursor: "pointer",
-                  "&:hover": { textDecoration: "underline" },
-                }}
-                onClick={() => onSelectTool && onSelectTool(module.title, tool)}
+                to={tool.path}
+                className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+                style={{ textDecoration: "none" }}
               >
-                {tool}
-              </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    display: "block",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    transition: "all 0.25s ease-in-out",
+                  }}
+                >
+                  {tool.name}
+                </Typography>
+              </NavLink>
             ))}
           </AccordionDetails>
         </Accordion>
       ))}
-
-      <div className="footer">© 2025 HybridScan</div>
-    </div>
+    </aside>
   );
 }
