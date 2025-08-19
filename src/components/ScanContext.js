@@ -1,46 +1,60 @@
-// src/contexts/ScanContext.js
-import React, { createContext, useContext, useState } from 'react';
+// src/components/ScanContext.js
+import React, { createContext, useContext, useState, useEffect } from "react";
 
-const ScanContext = createContext(null);
+const ScanContext = createContext();
 
-export function ScanProvider({ children }) {
-    // Your state and functions here
-    const [scanState, setScanState] = useState({
-        isScanning: false,
-        results: null,
-        error: null,
-    });
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
-    // The function you want to expose
-    const startScan = (tool, data) => {
-        setScanState({
-            isScanning: true,
-            results: null,
-            error: null,
-        });
-        // Simulate API call or some other async work
-        setTimeout(() => {
-            setScanState({
-                isScanning: false,
-                results: data, // Or the actual API results
-                error: null,
-            });
-        }, 3000);
-    };
-
-    const value = { scanState, startScan };
-
-    return (
-        <ScanContext.Provider value={value}>
-            {children}
-        </ScanContext.Provider>
-    );
-}
-
-export function useScan() {
-    const context = useContext(ScanContext);
-    if (context === null) {
-        throw new Error('useScan must be used within a ScanProvider');
+export const ScanProvider = ({ children }) => {
+  const [targets, setTargets] = useState(() => {
+    try {
+      const storedTargets = localStorage.getItem("targets");
+      return storedTargets ? JSON.parse(storedTargets) : [];
+    } catch (error) {
+      console.error("Failed to load targets from localStorage", error);
+      return [];
     }
-    return context;
-}
+  });
+
+  // 👇 New global scan state
+  const [scanState, setScanState] = useState({
+    isScanning: false,
+    tool: null,
+    progress: 0,
+  });
+
+  const addScanResult = (targetName, newScan) => {
+    setTargets((prevTargets) => {
+      const targetExists = prevTargets.some((target) => target.name === targetName);
+      if (targetExists) {
+        return prevTargets.map((target) =>
+          target.name === targetName
+            ? { ...target, scans: [...target.scans, { id: generateId(), ...newScan }] }
+            : target
+        );
+      } else {
+        return [
+          ...prevTargets,
+          { name: targetName, scans: [{ id: generateId(), ...newScan }] },
+        ];
+      }
+    });
+  };
+
+  // Persist targets to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("targets", JSON.stringify(targets));
+    } catch (error) {
+      console.error("Failed to save targets to localStorage", error);
+    }
+  }, [targets]);
+
+  return (
+    <ScanContext.Provider value={{ targets, addScanResult, scanState, setScanState }}>
+      {children}
+    </ScanContext.Provider>
+  );
+};
+
+export const useScan = () => useContext(ScanContext);

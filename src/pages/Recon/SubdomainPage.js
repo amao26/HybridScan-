@@ -10,7 +10,7 @@ import {
   ListItemText,
 } from "@mui/material";
 
-export default function SubdomainPage() {
+export default function SubdomainPage({ updateTarget }) {
   const [domain, setDomain] = useState("");
   const [subdomains, setSubdomains] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -29,11 +29,16 @@ export default function SubdomainPage() {
     setTimeout(() => {
       setIsScanning(false);
       const toolName = tool === "ffuf" ? "FFUF" : "Sublist3r";
-      setSubdomains([
+      const results = [
         `subdomain-1.${domain} (via ${toolName})`,
         `subdomain-2.${domain} (via ${toolName})`,
         `subdomain-3.${domain} (via ${toolName})`,
-      ]);
+      ];
+      setSubdomains(results);
+
+      // ✅ Pass the subdomain results to the central state management
+      updateTarget(domain, "Subdomain", results);
+
     }, 2000);
   };
 
@@ -62,6 +67,7 @@ export default function SubdomainPage() {
             },
             "& .MuiInputLabel-root": { color: "var(--text)" },
           }}
+          disabled={isScanning}
         />
         <div style={{ display: "flex", gap: "16px" }}>
           <Button
@@ -86,7 +92,7 @@ export default function SubdomainPage() {
       {subdomains.length > 0 && (
         <Paper className="card" sx={{ p: 2, mt: 3, backgroundColor: "var(--card)" }}>
           <Typography variant="h5" gutterBottom sx={{ color: "var(--accent)" }}>
-            Results3
+            Results
           </Typography>
           <List>
             {subdomains.map((sub, index) => (

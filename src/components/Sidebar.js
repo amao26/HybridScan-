@@ -27,7 +27,6 @@ const sidebarData = [
   {
     title: "Exploitation",
     tools: [
-      { name: "Exploit Simulator", path: "/exploit/sim" },
       { name: "Privilege Escalation", path: "/exploit/privesc" },
       { name: "Post-Exploitation", path: "/exploit/postex" },
     ],
@@ -54,7 +53,7 @@ export default function Sidebar() {
         overflowY: "auto",
       }}
     >
-      {/* 👇 Dashboard link at the top */}
+      
       <NavLink
         to="/ "
         className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
