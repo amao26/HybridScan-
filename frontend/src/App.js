@@ -18,44 +18,6 @@ import PostExPage from "./pages/Exploit/PostExPage";
 import ResultsPage from "./pages/Results/ResultsPage";
 import AIPage from "./pages/Results/AIPage";
 
-// GlobalScanStatus component remains the same
-const GlobalScanStatus = () => {
-  const { scanState } = useScan();
-
-  if (!scanState.isScanning) {
-    return null;
-  }
-
-  return (
-    <Box
-      sx={{
-        position: 'fixed',
-        bottom: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '80%',
-        maxWidth: '500px',
-        p: 2,
-        bgcolor: 'var(--card)',
-        borderRadius: 2,
-        boxShadow: 3,
-        zIndex: 100,
-      }}
-    >
-      <Typography variant="body2" sx={{ color: "var(--text)", textAlign: "center", mb: 1 }}>
-        Running {scanState.tool} scan... ({scanState.progress}%)
-      </Typography>
-      <LinearProgress
-        variant="determinate"
-        value={scanState.progress}
-        sx={{
-          backgroundColor: "var(--muted)",
-          '& .MuiLinearProgress-bar': { backgroundColor: "var(--accent)" }
-        }}
-      />
-    </Box>
-  );
-};
 
 export default function App() {
   const [selectedResult, setSelectedResult] = useState(null);
@@ -91,7 +53,6 @@ export default function App() {
         <Layout>
           <MainRoutes />
         </Layout>
-        <GlobalScanStatus />
       </ScanProvider>
     </Router>
   );
