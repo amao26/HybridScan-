@@ -3,58 +3,71 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 const ScanContext = createContext();
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
 export const ScanProvider = ({ children }) => {
-  const [targets, setTargets] = useState(() => {
+  const [completedScans, setCompletedScans] = useState(() => {
     try {
-      const storedTargets = localStorage.getItem("targets");
-      return storedTargets ? JSON.parse(storedTargets) : [];
+      const storedScans = localStorage.getItem("completedScans");
+      return storedScans ? JSON.parse(storedScans) : [];
     } catch (error) {
-      console.error("Failed to load targets from localStorage", error);
+      console.error("Failed to load completed scans from localStorage", error);
       return [];
     }
   });
 
-  // 👇 New global scan state
-  const [scanState, setScanState] = useState({
-    isScanning: false,
-    tool: null,
-    progress: 0,
-  });
+  const [inProgressScan, setInProgressScan] = useState(null);
 
-  const addScanResult = (targetName, newScan) => {
-    setTargets((prevTargets) => {
-      const targetExists = prevTargets.some((target) => target.name === targetName);
-      if (targetExists) {
-        return prevTargets.map((target) =>
-          target.name === targetName
-            ? { ...target, scans: [...target.scans, { id: generateId(), ...newScan }] }
-            : target
-        );
-      } else {
-        return [
-          ...prevTargets,
-          { name: targetName, scans: [{ id: generateId(), ...newScan }] },
-        ];
-      }
+  const startNewScan = (target, tool, scanId) => {
+    setInProgressScan({
+      _id: scanId,
+      target: target,
+      tool: tool,
+      status: "in-progress",
+      progress: 0,
+      eta: "N/A",
+      timestamp: new Date().toISOString(),
     });
   };
 
-  // Persist targets to localStorage
+  const updateScanProgress = (scanId, progressData) => {
+    if (inProgressScan && inProgressScan._id === scanId) {
+      setInProgressScan((prev) => ({
+        ...prev,
+        progress: progressData.percent,
+        eta: progressData.eta,
+      }));
+    }
+  };
+
+  const finalizeScan = (scanId, resultData) => {
+    if (inProgressScan && inProgressScan._id === scanId) {
+      setCompletedScans((prev) => [resultData, ...prev]);
+      setInProgressScan(null);
+    }
+  };
+
   useEffect(() => {
     try {
-      localStorage.setItem("targets", JSON.stringify(targets));
+      localStorage.setItem("completedScans", JSON.stringify(completedScans));
     } catch (error) {
-      console.error("Failed to save targets to localStorage", error);
+      console.error("Failed to save completed scans to localStorage", error);
     }
-  }, [targets]);
+  }, [completedScans]);
 
-  return (
-    <ScanContext.Provider value={{ targets, addScanResult, scanState, setScanState }}>
-      {children}
-    </ScanContext.Provider>
-  );
+  const value = {
+    completedScans,
+    inProgressScan,
+    startNewScan,
+    updateScanProgress,
+    finalizeScan,
+  };
+
+  return <ScanContext.Provider value={value}>{children}</ScanContext.Provider>;
 };
 
-export const useScan = () => useContext(ScanContext);
+export const useScan = () => {
+  const context = useContext(ScanContext);
+  if (!context) {
+    throw new Error("useScan must be used within a ScanProvider");
+  }
+  return context;
+};

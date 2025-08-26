@@ -4,31 +4,46 @@ import {
   Typography,
   TextField,
   Button,
-  FormControlLabel,
-  Switch,
-  LinearProgress,
   Box,
+  LinearProgress,
   List,
   ListItem,
   ListItemText,
   Divider,
-  Grid, // <-- This line was added to fix the error
+  Grid,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
 } from "@mui/material";
+import axios from "axios";
+
 
 export default function NmapPage() {
   const [target, setTarget] = useState("");
-  const [portRange, setPortRange] = useState("");
-  const [osDetection, setOsDetection] = useState(false);
-  const [serviceDetection, setServiceDetection] = useState(false);
-  const [scriptScan, setScriptScan] = useState(false);
-
+  const [scanProfile, setScanProfile] = useState("quick");
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [eta, setEta] = useState("calculating...");
   const [liveLog, setLiveLog] = useState([]);
   const [scanResult, setScanResult] = useState(null);
+  const [nmapCommand, setNmapCommand] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
 
   const esRef = useRef(null);
+
+  const scanProfiles = {
+    "Intense scan": "-T4 -A -v",
+    "Intense scan plus UDP": "-T4 -A -v -sU",
+    "Intense scan, all TCP ports": "-p 1-65535 -T4 -A -v",
+    "Intense scan, no ping": "-T4 -A -v -Pn",
+    "Ping scan": "-sn",
+    "Quick scan": "-T4 -F",
+    "Quick scan plus": "-sV -T4 -O -F --version-light",
+    "Quick traceroute": "-sn --traceroute",
+    "Regular scan": "",
+    "Slow comprehensive scan": "-sS -sU -T4 -A -v -PE -PP -PS80,443 -PU40125 -PY -g 53 --script \"default or (discovery and safe)\"",
+  };
 
   const closeStream = () => {
     if (esRef.current) {
@@ -41,6 +56,14 @@ export default function NmapPage() {
     }
   };
 
+  useEffect(() => {
+    if (!isTyping) {
+      const flags = scanProfiles[scanProfile] || "";
+      const command = `nmap ${flags} ${target}`.trim();
+      setNmapCommand(command);
+    }
+  }, [target, scanProfile, isTyping]);
+
   const handleScan = () => {
     if (!target) return alert("Enter a target IP or domain");
 
@@ -48,19 +71,20 @@ export default function NmapPage() {
     setIsScanning(true);
     setProgress(0);
     setEta("calculating...");
-    setLiveLog([`🚀 Starting scan on ${target}...`]);
+    setLiveLog([`🚀 Starting scan from command: ${nmapCommand}`]);
     setScanResult(null);
 
+    const commandParts = nmapCommand.split(' ').filter(part => part.trim() !== '');
+    const options = commandParts.slice(1, -1).join(' ');
+    const finalTarget = commandParts.length > 1 ? commandParts[commandParts.length - 1] : target;
+
     const params = new URLSearchParams({
-      target,
-      os: String(osDetection),
-      service: String(serviceDetection),
-      scripts: String(scriptScan),
+      target: finalTarget,
+      options,
+      tool: 'Nmap', 
     });
-    if (portRange) params.set("ports", portRange);
 
     const url = `http://localhost:5000/scan/stream?${params.toString()}`;
-
     const es = new EventSource(url);
     esRef.current = es;
 
@@ -83,9 +107,10 @@ export default function NmapPage() {
       }
     });
 
-    es.addEventListener("result", (evt) => {
+    es.addEventListener("result", async (evt) => {
       try {
         const data = JSON.parse(evt.data);
+        data.tool = "Nmap"; // 固定工具名
         setScanResult(data);
       } catch (e) {
         setLiveLog((prev) => [...prev, "❌ Failed to parse result"]);
@@ -111,75 +136,72 @@ export default function NmapPage() {
 
   return (
     <div className="main">
-      {/* Input Card */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h5" gutterBottom>
           Nmap Scanner
         </Typography>
 
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={7}>
+            <TextField
+              label="Target (IP / Domain)"
+              fullWidth
+              value={target}
+              onChange={(e) => { setIsTyping(false); setTarget(e.target.value); }}
+              sx={{
+                "& .MuiInputLabel-root": { color: "white" },
+                "& .MuiInputBase-root": {
+                  color: "white",
+                  "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                  "&:hover fieldset": { borderColor: "white" },
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <FormControl fullWidth>
+              <InputLabel id="scan-profile-label" sx={{ color: "white" }}>
+                Scan Profile
+              </InputLabel>
+              <Select
+                labelId="scan-profile-label"
+                value={scanProfile}
+                label="Scan Profile"
+                onChange={(e) => { setIsTyping(false); setScanProfile(e.target.value); }}
+                sx={{
+                  color: "white",
+                  "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255,255,255,0.2)" },
+                  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "white" },
+                  "& .MuiSelect-icon": { color: "white" },
+                }}
+              >
+                {Object.keys(scanProfiles).map((profile) => (
+                  <MenuItem key={profile} value={profile}>
+                    {profile}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
         <TextField
-          label="Target (IP / Domain)"
+          label="Nmap Command"
           fullWidth
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
+          value={nmapCommand}
+          onChange={(e) => { setIsTyping(true); setNmapCommand(e.target.value); }}
           sx={{
-            mb: 2,
-            "& .MuiInputLabel-root": { color: 'white' },
+            mt: 2,
+            "& .MuiInputLabel-root": { color: "white" },
             "& .MuiInputBase-root": {
-              color: 'white',
-              "& fieldset": { borderColor: 'rgba(255,255,255,0.2)' },
-              "&:hover fieldset": { borderColor: 'white' },
+              color: "#90caf9",
+              fontFamily: "monospace",
+              "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
             },
           }}
         />
 
-        <TextField
-          label="Port Range (e.g. 1-1000 or 80,443)"
-          fullWidth
-          value={portRange}
-          onChange={(e) => setPortRange(e.target.value)}
-          sx={{
-            mb: 2,
-            "& .MuiInputLabel-root": { color: 'white' },
-            "& .MuiInputBase-root": {
-              color: 'white',
-              "& fieldset": { borderColor: 'rgba(255,255,255,0.2)' },
-              "&:hover fieldset": { borderColor: 'white' },
-            },
-          }}
-        />
-
-        <Box>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={osDetection}
-                onChange={(e) => setOsDetection(e.target.checked)}
-              />
-            }
-            label="OS Detection (-O)"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={serviceDetection}
-                onChange={(e) => setServiceDetection(e.target.checked)}
-              />
-            }
-            label="Service Detection (-sV)"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={scriptScan}
-                onChange={(e) => setScriptScan(e.target.checked)}
-              />
-            }
-            label="Script Scan (-sC)"
-          />
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+        <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
           <Button
             variant="contained"
             color="primary"
@@ -192,7 +214,7 @@ export default function NmapPage() {
           <Button
             variant="outlined"
             color="primary"
-            onClick={() => setTarget("scanme.nmap.org")}
+            onClick={() => { setIsTyping(false); setTarget("scanme.nmap.org"); }}
             disabled={isScanning}
           >
             Example
@@ -200,7 +222,6 @@ export default function NmapPage() {
         </Box>
       </Paper>
 
-      {/* Progress */}
       {isScanning && (
         <Box sx={{ my: 2 }}>
           <LinearProgress variant="determinate" value={progress} />
@@ -212,7 +233,6 @@ export default function NmapPage() {
         </Box>
       )}
 
-      {/* Logs */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6">Live Log</Typography>
         <List sx={{ maxHeight: 260, overflow: "auto" }}>
@@ -224,57 +244,39 @@ export default function NmapPage() {
         </List>
       </Paper>
 
-      {/* Results */}
       {scanResult && (
-        <Paper sx={{ p: 4, bgcolor: '#121212', color: 'white', borderRadius: 2 }}>
+        <Paper sx={{ p: 4, bgcolor: '#1e1e1e', color: 'white', borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>Tool: {scanResult.tool}</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-              Scan Results for
-            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Scan Results for</Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#4caf50', ml: 1 }}>
               {scanResult.target}
             </Typography>
           </Box>
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                Status: <Box component="span" sx={{ color: '#4caf50' }}>{scanResult.status === 'completed' ? '✅ Completed' : scanResult.status}</Box>
-              </Typography>
+              <Typography>Status: <Box component="span" sx={{ color: '#4caf50' }}>{scanResult.status === 'completed' ? '✅ Completed' : scanResult.status}</Box></Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                Detected OS: <Box component="span" sx={{ color: 'rgba(255,255,255,0.7)' }}>{scanResult.detectedOS}</Box>
-              </Typography>
+              <Typography>Detected OS: <Box component="span" sx={{ color: 'rgba(255,255,255,0.7)' }}>{scanResult.detectedOS || 'N/A'}</Box></Typography>
             </Grid>
           </Grid>
           <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.2)' }} />
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-              Open Ports
-          </Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>Open Ports</Typography>
           <List dense>
-            {scanResult.ports.length > 0 ? (
+            {scanResult.ports && scanResult.ports.length > 0 ? (
               scanResult.ports.map((port, idx) => (
                 <ListItem key={idx} sx={{
                   bgcolor: '#1e1e1e',
                   mb: 1,
                   borderRadius: 1,
                   borderLeft: '4px solid #4caf50',
-                  transition: 'background-color 0.3s',
-                  '&:hover': {
-                    bgcolor: '#2c2c2c'
-                  }
+                  transitionF: 'background-color 0.3s',
+                  '&:hover': { bgcolor: '#2c2c2c' }
                 }}>
                   <ListItemText
-                    primary={
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'white' }}>
-                        {`Port ${port.port}/${port.protocol}`}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                        {`State: ${port.state} | Service: ${port.service}`}
-                      </Typography>
-                    }
+                    primary={<Typography sx={{ fontWeight: 'bold', color: 'white' }}>{`Port ${port.port}/${port.protocol}`}</Typography>}
+                    secondary={<Typography sx={{ color: 'rgba(255,255,255,0.7)' }}>{`State: ${port.state} | Service: ${port.service}`}</Typography>}
                   />
                 </ListItem>
               ))

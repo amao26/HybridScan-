@@ -1,252 +1,232 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Typography,
   TextField,
   Button,
   Paper,
-  LinearProgress,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon,
   Grid,
-  Chip,
   Box,
+  Divider,
+  Chip,
+  IconButton,
+  CircularProgress,
 } from "@mui/material";
-import {
-  Search,
-  CheckCircleOutline,
-  ErrorOutline,
-  Link,
-  Person,
-  Email,
-} from "@mui/icons-material";
+import { ContentCopy } from "@mui/icons-material";
+import { styled } from "@mui/system";
+import axios from "axios";
 
-export default function AdvancedOSINTPage({ updateTarget }) {
+// --- Styled Components ---
+const PageContainer = styled(Box)({
+  maxWidth: 1200,
+  margin: "40px auto",
+  padding: "16px",
+});
+
+const StyledPaper = styled(Paper)({
+  padding: "32px",
+  backgroundColor: "#161b22",
+  borderRadius: "16px",
+});
+
+const AnimatedButton = styled(Button)({
+  backgroundColor: "#58a6ff",
+  color: "#0d1117",
+  fontWeight: "bold",
+  borderRadius: "12px",
+});
+
+const StyledTextField = styled(TextField)({
+  "& .MuiInputBase-root": {
+    borderRadius: "12px",
+    color: "#c9d1d9",
+    backgroundColor: "#21262d",
+  },
+  "& .MuiInputLabel-root": { color: "#c9d1d9" },
+});
+
+const ResultCard = styled(Paper)({
+  p: 2,
+  backgroundColor: "#21262d",
+  borderRadius: "12px",
+  transition: "transform 0.2s, box-shadow 0.2s",
+  "&:hover": { transform: "translateY(-4px)", boxShadow: "0 8px 20px rgba(0,0,0,0.4)" },
+});
+
+export default function AdvancedOSINTPage() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [liveLog, setLiveLog] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [status, setStatus] = useState("Ready to search.");
-  const [progress, setProgress] = useState(0);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanStart, setScanStart] = useState(null);
+  const [scanEnd, setScanEnd] = useState(null);
+  const [showFullResults, setShowFullResults] = useState(false);
+  const esRef = useRef(null);
 
-  const sources = [
-    { name: "Social Media", icon: <Person />, delay: 1000 },
-    { name: "Data Breaches", icon: <Email />, delay: 2000 },
-    { name: "Domain Registries", icon: <Link />, delay: 1500 },
-  ];
+  const closeStream = () => {
+    if (esRef.current) { esRef.current.close(); esRef.current = null; }
+  };
+  useEffect(() => { return () => closeStream(); }, []);
 
   const handleSearch = () => {
-    if (!query) {
-      setStatus("Please enter a name or email.");
-      return;
-    }
-
+    if (!query.trim()) return;
+    closeStream();
     setIsSearching(true);
-    setResults([]);
-    setProgress(0);
-    setStatus("Initiating search...");
+    setLiveLog([]);
+    setScanResult(null);
+    setShowFullResults(false);
+    setScanStart(new Date());
+    setScanEnd(null);
 
-    let completedSources = 0;
-    const totalSources = sources.length;
-    let newResults = [];
+    const url = `http://localhost:5000/osint/username?username=${query}`;
+    const es = new EventSource(url);
+    esRef.current = es;
 
-    sources.forEach((source, index) => {
-      setTimeout(() => {
-        const found = Math.random() > 0.3; // 70% chance to find something
-        const resultItem = {
-          source: source.name,
-          icon: source.icon,
-          status: found ? "Found" : "Not Found",
-          data: found
-            ? generateMockData(source.name, query)
-            : `No information found on ${source.name}.`,
-        };
-        newResults = [...newResults, resultItem];
-        setResults([...newResults]);
+    const resultsFound = {};
+    const fullLogData = [];
 
-        completedSources++;
-        setProgress((completedSources / totalSources) * 100);
+    es.addEventListener("log", (evt) => {
+      try {
+        const { line } = JSON.parse(evt.data);
+        const cleanedLine = line.replace(/\u001b\[.*?m/g, "");
+        fullLogData.push(cleanedLine);
+        setLiveLog([...fullLogData].slice(-10));
 
-        if (completedSources === totalSources) {
-          setIsSearching(false);
-          setStatus("Search complete.");
-          // ✅ Pass the search results to the central state management
-          updateTarget(query, "OSINT", newResults);
-        }
-      }, source.delay);
+        const foundMatch = cleanedLine.match(/\+\] (.*): (https?:\/\/(.*))/);
+        if (foundMatch) resultsFound[foundMatch[1]] = foundMatch[2];
+      } catch (e) { console.error("Failed to parse log event:", e); }
+    });
+
+    es.addEventListener("end", async () => {
+      setIsSearching(false);
+      setScanEnd(new Date());
+      setScanResult(resultsFound);
+      setLiveLog([...fullLogData].slice(-10));
+
+      // --- 保存到 MongoDB ---
+      try {
+        await axios.post("http://localhost:5000/scan/saveScan", {
+          target: query,
+          tool: "OSINT",
+          status: "completed",
+          detectedOS: null,
+          ports: [],
+          timestamp: new Date(),
+          results: resultsFound,
+        });
+        console.log("OSINT result saved to MongoDB");
+      } catch (err) { console.error("Failed to save OSINT result", err); }
+
+      closeStream();
+    });
+
+    es.addEventListener("error", () => {
+      setLiveLog((prev) => [...prev, "❌ Stream error or connection lost"]);
+      setIsSearching(false);
+      closeStream();
     });
   };
 
-  const generateMockData = (sourceName, query) => {
-    const [firstName] = query.split(" ");
-    switch (sourceName) {
-      case "Social Media":
-        return [
-          `LinkedIn Profile: linkedin.com/in/${firstName.toLowerCase()}...`,
-          `Twitter Account: twitter.com/${firstName.toLowerCase()}osint`,
-        ];
-      case "Data Breaches":
-        return [
-          `Email found in breach: ${firstName.toLowerCase()}@example.com`,
-          `Possible aliases: ${firstName.toLowerCase()}123`,
-        ];
-      case "Domain Registries":
-        return [
-          `Registered Domain: ${firstName.toLowerCase()}-corp.com`,
-          `Registrant Email: redacted`,
-        ];
-      default:
-        return [`Found generic information related to ${query}`];
-    }
+  const handleCopy = (text) => navigator.clipboard.writeText(text);
+
+  const getLogColor = (log) => {
+    if (log.startsWith("🔍")) return "#58a6ff";
+    if (log.startsWith("[*]")) return "#f9c74f";
+    if (log.startsWith("[+]")) return "#4caf50";
+    if (log.startsWith("❌")) return "#f94144";
+    return "#c9d1d9";
   };
 
   return (
-    <div className="main">
-      <Paper
-        className="card"
-        sx={{
-          p: 4,
-          mb: 3,
-          backgroundColor: "var(--card)",
-          border: "1px solid rgba(255,255,255,0.1)",
-        }}
-      >
-        <Box display="flex" alignItems="center" mb={2}>
-          <Search sx={{ color: "var(--accent)", mr: 1, fontSize: 32 }} />
-          <Typography variant="h4" sx={{ color: "var(--text)", fontWeight: "bold" }}>
-            Advanced OSINT Lookup
-          </Typography>
-        </Box>
-        <Typography variant="body1" sx={{ color: "var(--text-light)", mb: 3 }}>
-          {isSearching ? `Scanning ${status}` : status}
-        </Typography>
-
-        <Grid container spacing={2} alignItems="center">
-          <Grid xs={12} sm={9}>
-            <TextField
-              label="Enter name, username, or email"
-              variant="outlined"
+    <PageContainer>
+      {/* --- Search Panel --- */}
+      <StyledPaper>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Typography variant="h4" sx={{ color: "#58a6ff", fontWeight: "bold", textAlign: "center" }}>
+              👤 Username OSINT Lookup
+            </Typography>
+          </Grid>
+          <Grid item xs={12}>
+            <StyledTextField
               fullWidth
+              label="Enter a username"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               disabled={isSearching}
-              sx={{
-                "& .MuiInputBase-root": {
-                  color: "var(--text)",
-                  backgroundColor: "var(--panel)",
-                  "& fieldset": { borderColor: "rgba(255,255,255,0.08)" },
-                  "&:hover fieldset": { borderColor: "var(--accent)" },
-                },
-                "& .MuiInputLabel-root": { color: "var(--text)" },
-              }}
             />
           </Grid>
-          <Grid xs={12} sm={3}>
-            <Button
-              variant="contained"
-              onClick={handleSearch}
-              disabled={isSearching || !query}
+          <Grid item xs={12}>
+            <AnimatedButton
               fullWidth
-              sx={{
-                height: "100%",
-                backgroundColor: "var(--accent)",
-                color: "var(--bg)",
-                "&:hover": { backgroundColor: "var(--accent-dark)" },
-              }}
+              onClick={handleSearch}
+              disabled={isSearching || !query.trim()}
             >
-              {isSearching ? "Searching..." : "Search"}
-            </Button>
+              {isSearching ? <CircularProgress size={24} sx={{ color: "#0d1117" }} /> : "🚀 Start Search"}
+            </AnimatedButton>
           </Grid>
         </Grid>
+      </StyledPaper>
 
-        {isSearching && (
-          <Box mt={3}>
-            <LinearProgress
-              variant="determinate"
-              value={progress}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: "rgba(255,255,255,0.1)",
-                "& .MuiLinearProgress-bar": {
-                  backgroundColor: "var(--accent)",
-                },
-              }}
-            />
-            <Typography variant="caption" sx={{ color: "var(--text-light)", mt: 1, display: "block" }}>
-              {progress.toFixed(0)}% Complete
-            </Typography>
-          </Box>
-        )}
-      </Paper>
+      <Divider sx={{ my: 4, backgroundColor: "rgba(255,255,255,0.1)" }} />
 
-      {results.length > 0 && (
-        <Paper
-          className="card"
-          sx={{
-            p: 4,
-            mt: 3,
-            backgroundColor: "var(--card)",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}
-        >
-          <Typography variant="h5" gutterBottom sx={{ color: "var(--accent)" }}>
-            Scan Results
-          </Typography>
-          <List>
-            {results.map((item, i) => (
-              <ListItem key={i} sx={{ borderBottom: "1px solid rgba(255,255,255,0.05)", py: 2 }}>
-                <ListItemIcon sx={{ minWidth: 40, color: "var(--text)" }}>
-                  {item.status === "Found" ? (
-                    <CheckCircleOutline sx={{ color: "green" }} />
-                  ) : (
-                    <ErrorOutline sx={{ color: "red" }} />
-                  )}
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Typography
-                      component="span"
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        color: "var(--text)",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {item.icon}
-                      <Box component="span" ml={1}>
-                        {item.source}
-                      </Box>
-                      <Chip
-                        label={item.status}
-                        size="small"
-                        sx={{
-                          ml: 2,
-                          backgroundColor:
-                            item.status === "Found" ? "green" : "red",
-                          color: "#fff",
-                        }}
-                      />
-                    </Typography>
-                  }
-                  secondary={
-                    <Box component="span" sx={{ color: "var(--text-light)", mt: 1, display: "block" }}>
-                      {Array.isArray(item.data)
-                        ? item.data.map((line, j) => (
-                            <Typography key={j} variant="body2" component="p">
-                              {line}
-                            </Typography>
-                          ))
-                        : item.data}
-                    </Box>
-                  }
-                />
+      {/* --- Live Log --- */}
+      {isSearching && (
+        <Paper sx={{ p: 2, mt: 4, backgroundColor: "#21262d", borderRadius: 3 }}>
+          <Typography variant="h5" sx={{ color: "#58a6ff", mb: 1 }}>Live Search Logs</Typography>
+          <List dense sx={{ maxHeight: 300, overflow: "auto", fontFamily: "monospace", fontSize: "0.9rem" }}>
+            {liveLog.map((log, idx) => (
+              <ListItem key={idx} sx={{ py: 0.5 }}>
+                <ListItemText primary={log} sx={{ color: getLogColor(log), whiteSpace: "pre-wrap" }} />
               </ListItem>
             ))}
           </List>
         </Paper>
       )}
-    </div>
+
+      {/* --- Summary + Expandable Results --- */}
+      {!isSearching && scanResult && (
+        <Paper sx={{ p: 2, mt: 4, backgroundColor: "#21262d", borderRadius: 3 }}>
+          <Typography variant="h6" sx={{ color: "#58a6ff", mb: 1 }}>Summary</Typography>
+          <Typography>Target: {query}</Typography>
+          <Typography>Start: {scanStart?.toLocaleString()}</Typography>
+          <Typography>End: {scanEnd?.toLocaleString()}</Typography>
+          <Typography>Total Found: {Object.keys(scanResult).length}</Typography>
+          <Button onClick={() => setShowFullResults(!showFullResults)} sx={{ mt: 1 }}>
+            {showFullResults ? "Hide Details" : "Show All Results"}
+          </Button>
+
+          {showFullResults && (
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              {Object.keys(scanResult).map((platform) => (
+                <Grid item xs={12} sm={6} md={4} key={platform}>
+                  <ResultCard>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography sx={{ color: "#c9d1d9", fontWeight: "bold" }}>{platform}</Typography>
+                      <Chip label="Found" size="small" sx={{ backgroundColor: "green", color: "#fff" }} />
+                    </Box>
+                    <Typography
+                      component="a"
+                      href={scanResult[platform]}
+                      target="_blank"
+                      sx={{ color: "#8b949e", wordBreak: "break-word" }}
+                    >
+                      {scanResult[platform]}
+                    </Typography>
+                    <Box textAlign="right">
+                      <IconButton size="small" onClick={() => handleCopy(scanResult[platform])} sx={{ color: "#c9d1d9" }}>
+                        <ContentCopy fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </ResultCard>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Paper>
+      )}
+    </PageContainer>
   );
 }

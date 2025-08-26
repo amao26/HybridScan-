@@ -1,0 +1,17 @@
+# Use Node.js for development
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Mount the app volume for live editing
+COPY . .
+
+# Expose dev server port
+EXPOSE 3000
+
+# Start React dev server
+CMD ["npm", "start"]

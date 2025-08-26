@@ -13,7 +13,7 @@ const sidebarData = [
     title: "Reconnaissance",
     tools: [
       { name: "Network Scan (Nmap)", path: "/recon/nmappage" },
-      { name: "Subdomain Scan (FFUF/Sublist3r)", path: "/recon/subdomain" },
+      { name: "Subdomain Scan", path: "/recon/subdomain" },
       { name: "OSINT / Public Data", path: "/recon/osint" },
     ],
   },
